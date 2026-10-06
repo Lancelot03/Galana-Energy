@@ -1,0 +1,7 @@
+{
+  "name": "Galana Energy",
+  "description": "Executive sales analytics, location mapping, Mombasa depot 360, product performance, and AI intelligence for Galana Energy Kenya.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
