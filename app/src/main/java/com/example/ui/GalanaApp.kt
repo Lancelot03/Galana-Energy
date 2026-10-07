@@ -96,6 +96,13 @@ fun GalanaApp(modifier: Modifier = Modifier) {
                             testTag = "nav_locations"
                         )
                         BottomNavItem(
+                            icon = if (currentScreen == ScreenRoute.DATA_UPLOAD) Icons.Filled.CloudUpload else Icons.Outlined.CloudUpload,
+                            label = "Upload",
+                            isSelected = currentScreen == ScreenRoute.DATA_UPLOAD,
+                            onClick = { navigateTo(ScreenRoute.DATA_UPLOAD) },
+                            testTag = "nav_upload"
+                        )
+                        BottomNavItem(
                             icon = if (currentScreen == ScreenRoute.PRODUCT_PERFORMANCE) Icons.Filled.Inventory2 else Icons.Outlined.Inventory2,
                             label = "Products",
                             isSelected = currentScreen == ScreenRoute.PRODUCT_PERFORMANCE,
@@ -167,6 +174,14 @@ fun GalanaApp(modifier: Modifier = Modifier) {
                     onNavigate = { navigateTo(it) },
                     onBack = { navigateBack() }
                 )
+                ScreenRoute.SAP_LIVE_SYNC -> SapLiveSyncScreen(
+                    onNavigate = { navigateTo(it) },
+                    onBack = { navigateBack() }
+                )
+                ScreenRoute.DATA_UPLOAD -> DataUploadScreen(
+                    onNavigate = { navigateTo(it) },
+                    onBack = { navigateBack() }
+                )
             }
         }
     }
@@ -222,6 +237,22 @@ fun GalanaApp(modifier: Modifier = Modifier) {
                     icon = Icons.Default.AutoAwesome,
                     iconColor = GalanaAmber,
                     onClick = { navigateTo(ScreenRoute.ASK_AI) }
+                )
+
+                MoreSheetItem(
+                    title = "SAP Live Sync & Ledger",
+                    subtitle = "S/4HANA OData Client 080 Billing Items",
+                    icon = Icons.Default.CloudSync,
+                    iconColor = FuelDieselBlue,
+                    onClick = { navigateTo(ScreenRoute.SAP_LIVE_SYNC) }
+                )
+
+                MoreSheetItem(
+                    title = "Upload Excel / JSON Data",
+                    subtitle = "Ingest custom sales data & demo presets",
+                    icon = Icons.Default.CloudUpload,
+                    iconColor = GalanaAmber,
+                    onClick = { navigateTo(ScreenRoute.DATA_UPLOAD) }
                 )
 
                 Divider(color = Color(0xFFF1F5F9), modifier = Modifier.padding(vertical = 4.dp))

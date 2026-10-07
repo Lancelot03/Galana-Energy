@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.EnergyRepository
+import com.example.data.SapSalesRepository
 import com.example.model.LocationItem
 import com.example.model.ScreenRoute
 import com.example.ui.components.KenyaMapCanvas
@@ -31,17 +32,20 @@ fun LocationMapScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val billingItems by SapSalesRepository.billingItems.collectAsState()
+    val allLocations = remember(billingItems) { EnergyRepository.computeLocations(billingItems) }
+
     var selectedFilter by remember { mutableStateOf("All") }
-    var selectedLocation by remember {
-        mutableStateOf(EnergyRepository.locations.find { it.id == "mombasa-depot" } ?: EnergyRepository.locations.first())
+    var selectedLocation by remember(billingItems) {
+        mutableStateOf(allLocations.find { it.id == "mombasa-depot" } ?: allLocations.first())
     }
     var viewMode by remember { mutableStateOf("map") } // "map" or "list"
 
-    val filteredLocations = remember(selectedFilter) {
+    val filteredLocations = remember(selectedFilter, allLocations) {
         when (selectedFilter) {
-            "Depots" -> EnergyRepository.locations.filter { it.type == "Depot" }
-            "Stations" -> EnergyRepository.locations.filter { it.type == "Station" }
-            else -> EnergyRepository.locations
+            "Depots" -> allLocations.filter { it.type == "Depot" }
+            "Stations" -> allLocations.filter { it.type == "Station" }
+            else -> allLocations
         }
     }
 

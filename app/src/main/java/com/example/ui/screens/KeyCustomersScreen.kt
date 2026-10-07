@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.EnergyRepository
+import com.example.data.SapSalesRepository
 import com.example.model.CustomerItem
 import com.example.model.ScreenRoute
 import com.example.ui.theme.*
@@ -29,15 +30,18 @@ fun KeyCustomersScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val billingItems by SapSalesRepository.billingItems.collectAsState()
+    val allCustomers = remember(billingItems) { EnergyRepository.computeCustomers(billingItems) }
+
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
     var selectedCustomerDetail by remember { mutableStateOf<CustomerItem?>(null) }
 
-    val filteredCustomers = remember(searchQuery, selectedCategory) {
-        EnergyRepository.customers.filter { cust ->
+    val filteredCustomers = remember(searchQuery, selectedCategory, allCustomers) {
+        allCustomers.filter { cust ->
             val matchesSearch = cust.name.contains(searchQuery, ignoreCase = true) ||
                     cust.code.contains(searchQuery, ignoreCase = true)
-            val matchesCat = selectedCategory == "All" || cust.category == selectedCategory
+            val matchesCat = selectedCategory == "All" || cust.category.equals(selectedCategory, ignoreCase = true)
             matchesSearch && matchesCat
         }
     }

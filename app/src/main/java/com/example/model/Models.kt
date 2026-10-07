@@ -89,6 +89,40 @@ data class DepotTank(
     val colorHex: Long
 )
 
+data class SapBillingItem(
+    val billingDocument: String,
+    val billingDocumentItem: String,
+    val billingDocumentDate: String,
+    val salesOrganization: String,
+    val locationId: String,
+    val plantName: String,
+    val customerId: String,
+    val customerName: String,
+    val customerType: String,
+    val productId: String,
+    val productName: String,
+    val productCategory: String,
+    val salesUnit: String,
+    val transactionCurrency: String,
+    val quantity: Double,
+    val netAmount: Double,
+    val grossAmount: Double,
+    val discountAmount: Double
+)
+
+data class SapConnectionInfo(
+    val baseUrl: String = "https://my430716-api.s4hana.cloud.sap",
+    val servicePath: String = "/sap/opu/odata4/sap/zani_ui_gal_bind/srvd_a2x/sap/zani_ui_gal_sales/0001/",
+    val client: String = "080",
+    val hasCredentials: Boolean = true,
+    val lastStatus: String = "CONNECTED",
+    val lastSyncTime: String = "2026-10-06T19:29:10Z",
+    val detectedEntitySets: List<String> = listOf("BillingItem", "Customer", "Location", "Product", "SalesItem", "SalesKpi"),
+    val lastErrorMessage: String = "",
+    val serviceBinding: String = "ZANI_UI_GAL_BIND",
+    val serviceDefinition: String = "ZANI_UI_GAL_SALES"
+)
+
 enum class ScreenRoute {
     SIGN_IN,
     HOME,
@@ -99,11 +133,28 @@ enum class ScreenRoute {
     SALES_TREND,
     KEY_CUSTOMERS,
     GENERATE_REPORT,
-    ASK_AI
+    ASK_AI,
+    SAP_LIVE_SYNC,
+    DATA_UPLOAD
 }
 
 enum class Timeframe {
     TODAY,
     WEEK,
     MONTH
+}
+
+sealed class ActiveDataSource {
+    object StaticDefault : ActiveDataSource()
+    data class FileUploaded(
+        val fileName: String,
+        val recordCount: Int,
+        val uploadTime: String,
+        val fileSizeKb: Long = 0
+    ) : ActiveDataSource()
+    data class LiveSapApi(
+        val recordCount: Int,
+        val syncTime: String,
+        val endpoint: String
+    ) : ActiveDataSource()
 }

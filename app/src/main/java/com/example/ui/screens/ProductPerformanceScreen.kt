@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.EnergyRepository
+import com.example.data.SapSalesRepository
 import com.example.model.ProductItem
 import com.example.model.ScreenRoute
 import com.example.ui.theme.*
@@ -30,14 +31,17 @@ fun ProductPerformanceScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val billingItems by SapSalesRepository.billingItems.collectAsState()
+    val allProducts = remember(billingItems) { EnergyRepository.computeProducts(billingItems) }
+
     var selectedCategory by remember { mutableStateOf("All") }
     var selectedProductDetail by remember { mutableStateOf<ProductItem?>(null) }
 
-    val filteredProducts = remember(selectedCategory) {
+    val filteredProducts = remember(selectedCategory, allProducts) {
         when (selectedCategory) {
-            "Fuel" -> EnergyRepository.products.filter { it.category == "Fuel" }
-            "Lubricants" -> EnergyRepository.products.filter { it.category == "Lubricants" }
-            else -> EnergyRepository.products
+            "Fuel" -> allProducts.filter { it.category.equals("Fuel", ignoreCase = true) }
+            "Lubricants" -> allProducts.filter { it.category.equals("Lubricants", ignoreCase = true) }
+            else -> allProducts
         }
     }
 

@@ -43,11 +43,11 @@ fun AskAiScreen(
     val coroutineScope = rememberCoroutineScope()
 
     val quickPrompts = listOf(
+        "Show SAP S/4HANA billing documents",
         "Why did Mombasa sales increase in September?",
         "Show top products by volume",
         "Who are our top customers?",
-        "What is Mombasa tank capacity?",
-        "Compare regional margins"
+        "What is Mombasa tank capacity?"
     )
 
     fun sendMessage(text: String) {
@@ -147,6 +147,7 @@ fun AskAiScreen(
                                 chipText.contains("customer", ignoreCase = true) -> onNavigate(ScreenRoute.KEY_CUSTOMERS)
                                 chipText.contains("product", ignoreCase = true) -> onNavigate(ScreenRoute.PRODUCT_PERFORMANCE)
                                 chipText.contains("day", ignoreCase = true) || chipText.contains("trend", ignoreCase = true) -> onNavigate(ScreenRoute.SALES_TREND)
+                                chipText.contains("SAP", ignoreCase = true) || chipText.contains("Ledger", ignoreCase = true) -> onNavigate(ScreenRoute.SAP_LIVE_SYNC)
                                 else -> sendMessage(chipText)
                             }
                         }

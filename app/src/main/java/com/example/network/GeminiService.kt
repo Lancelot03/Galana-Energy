@@ -22,10 +22,13 @@ object GeminiService {
 
     private const val SYSTEM_PROMPT = """You are the Chief Intelligence Analyst for Galana Energy Kenya, a premier downstream oil and energy marketing company.
 Key context:
+- Connected to live SAP S/4HANA Cloud (my430716-api.s4hana.cloud.sap) Client 080 OData service ZANI_UI_GAL_SALES.
+- Active Billing Documents:
+  * Doc #90001042 (2026-09-26): Mombasa Depot -> KenGen Power (KG-01), Diesel (AGO) 32,500 KL, Net KES 4,620,000, Gross KES 5,370,000, Discount KES 750,000
+  * Doc #90001043 (2026-09-26): Mombasa Depot -> Kenya Ports Authority (KPA-01), Super Petrol (PMS) 24,200 KL, Net KES 2,840,000, Gross KES 3,240,000, Discount KES 400,000
+  * Doc #90001044 (2026-09-25): Nairobi West -> Kenya Airways (KQ-01), Jet A-1 3,840 KL, Net KES 720,000, Gross KES 860,000, Discount KES 140,000
+  * Doc #90001045 (2026-09-24): Mombasa Depot -> Bamburi Cement (BC-01), Engine Oil 15W40 600 KL, Net KES 480,000, Gross KES 630,000, Discount KES 150,000
 - Mombasa Depot is our coastal terminal hub connecting to Kipevu Oil Terminal (KOT Berth 1 & 2) and Kenya Pipeline Company (KPC) infrastructure.
-- Current Month Sales: KES 312.5M, 10,850 KL volume dispatched across 28 stations and depots.
-- Top products: Diesel (AGO) 1,260 KL, Super Petrol (PMS) 980 KL, Jet A-1 / ATF 45 KL, Kerosene 140 KL, Industrial & Fleet Lubricants 78 KL.
-- Primary anchor customers: KenGen Power (KES 2.14M), Kenya Ports Authority (KES 1.86M), Kenya Airways (KES 1.22M), Bamburi Cement (KES 0.98M), Tatu City (KES 0.76M).
 - Provide crisp, data-backed executive oil industry summaries, volume trends, margins, and operational recommendations."""
 
     suspend fun askAssistant(prompt: String): AssistantResponse = withContext(Dispatchers.IO) {
@@ -96,6 +99,17 @@ Key context:
         // Domain Knowledge Fallback Engine matching the Galana Energy operational dataset
         val query = prompt.lowercase()
         val (answer, chips) = when {
+            query.contains("sap") || query.contains("billing") || query.contains("invoice") || query.contains("odata") || query.contains("9000104") -> {
+                val text = "Live SAP S/4HANA Cloud (my430716-api.s4hana.cloud.sap) Status:\n" +
+                        "• OData v4 Service: ZANI_UI_GAL_SALES (Binding: ZANI_UI_GAL_BIND, Client: 080)\n" +
+                        "• Entity Sets Synced: BillingItem, Customer, Location, Product, SalesItem, SalesKpi\n\n" +
+                        "Recent SAP Billing Documents:\n" +
+                        "1. Doc #90001042 (26 Sep): KenGen Power — 32,500 KL Diesel (AGO), Net: KES 4,620,000 (Gross: KES 5.37M)\n" +
+                        "2. Doc #90001043 (26 Sep): Kenya Ports Authority — 24,200 KL Super Petrol, Net: KES 2,840,000 (Gross: KES 3.24M)\n" +
+                        "3. Doc #90001044 (25 Sep): Kenya Airways (KQ) — 3,840 KL Jet A-1, Net: KES 720,000\n" +
+                        "4. Doc #90001045 (24 Sep): Bamburi Cement — 600 KL Engine Oil 15W40, Net: KES 480,000"
+                text to listOf("Open SAP Ledger", "View Mombasa Depot", "Top Customers", "Sync SAP Cloud")
+            }
             query.contains("mombasa") || query.contains("depot") || query.contains("terminal") -> {
                 val text = "Mombasa Depot Operational Intelligence (September 2026):\n" +
                         "• Total Sales: KES 2.84M (▲ 12.6% MoM)\n" +

@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.EnergyRepository
+import com.example.data.SapSalesRepository
 import com.example.model.ScreenRoute
 import com.example.ui.components.TrendChart
 import com.example.ui.theme.*
@@ -30,10 +31,12 @@ fun SalesTrendScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedMetric by remember { mutableStateOf("value") } // "value", "volume", "margin"
-    var selectedIndex by remember { mutableStateOf(EnergyRepository.dailyTrends.lastIndex) }
+    val billingItems by SapSalesRepository.billingItems.collectAsState()
+    val trends = remember(billingItems) { EnergyRepository.computeDailyTrends(billingItems) }
 
-    val trends = EnergyRepository.dailyTrends
+    var selectedMetric by remember { mutableStateOf("value") } // "value", "volume", "margin"
+    var selectedIndex by remember(trends) { mutableStateOf(trends.lastIndex.coerceAtLeast(0)) }
+
     val selectedDay = trends.getOrNull(selectedIndex)
 
     Scaffold(

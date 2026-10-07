@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.EnergyRepository
+import com.example.data.SapSalesRepository
 import com.example.model.LocationItem
 import com.example.model.ScreenRoute
 import com.example.ui.theme.*
@@ -29,14 +30,17 @@ fun AllLocationsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val billingItems by SapSalesRepository.billingItems.collectAsState()
+    val allLocations = remember(billingItems) { EnergyRepository.computeLocations(billingItems) }
+
     var searchQuery by remember { mutableStateOf("") }
     var selectedRegion by remember { mutableStateOf("All") }
     var selectedLocationDetail by remember { mutableStateOf<LocationItem?>(null) }
 
     val regions = listOf("All", "Coast", "Nairobi", "Western", "Rift Valley", "Eastern")
 
-    val filtered = remember(searchQuery, selectedRegion) {
-        EnergyRepository.locations.filter { loc ->
+    val filtered = remember(searchQuery, selectedRegion, allLocations) {
+        allLocations.filter { loc ->
             val matchesSearch = loc.name.contains(searchQuery, ignoreCase = true) ||
                     loc.region.contains(searchQuery, ignoreCase = true)
             val matchesRegion = selectedRegion == "All" || loc.region == selectedRegion

@@ -26,9 +26,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.EnergyRepository
+import com.example.data.SapSalesRepository
 import com.example.model.ScreenRoute
 import com.example.ui.components.DepotTankGauge
 import com.example.ui.theme.*
+import java.util.Locale
 
 @Composable
 fun MombasaDepotScreen(
@@ -36,6 +38,22 @@ fun MombasaDepotScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val billingItems by SapSalesRepository.billingItems.collectAsState()
+    val mombasaTanks = remember(billingItems) { EnergyRepository.computeMombasaTanks(billingItems) }
+
+    val mombasaItems = remember(billingItems) {
+        billingItems.filter { it.plantName.contains("Mombasa", ignoreCase = true) }
+    }
+    val mombasaTotalNetM = remember(mombasaItems) {
+        if (mombasaItems.isNotEmpty()) mombasaItems.sumOf { it.netAmount } / 1_000_000.0 else 2.84
+    }
+    val mombasaFuelNetM = remember(mombasaItems) {
+        if (mombasaItems.isNotEmpty()) mombasaItems.filter { it.productCategory.equals("Fuel", ignoreCase = true) }.sumOf { it.netAmount } / 1_000_000.0 else 2.31
+    }
+    val mombasaLubeNetM = remember(mombasaItems) {
+        if (mombasaItems.isNotEmpty()) mombasaItems.filter { it.productCategory.equals("Lubricants", ignoreCase = true) }.sumOf { it.netAmount } / 1_000_000.0 else 0.53
+    }
+
     var selectedTab by remember { mutableStateOf("overview") }
     var show360Viewer by remember { mutableStateOf(false) }
 
@@ -220,19 +238,19 @@ fun MombasaDepotScreen(
                     ) {
                         DepotKpiMiniCard(
                             label = "Total Sales",
-                            value = "KES 2.84M",
+                            value = "KES ${String.format(Locale.US, "%.2f", mombasaTotalNetM)}M",
                             change = "▲ 12.6%",
                             modifier = Modifier.weight(1f)
                         )
                         DepotKpiMiniCard(
                             label = "Fuel",
-                            value = "KES 2.31M",
+                            value = "KES ${String.format(Locale.US, "%.2f", mombasaFuelNetM)}M",
                             change = "▲ 13.2%",
                             modifier = Modifier.weight(1f)
                         )
                         DepotKpiMiniCard(
                             label = "Lubricants",
-                            value = "KES 0.53M",
+                            value = "KES ${String.format(Locale.US, "%.2f", mombasaLubeNetM)}M",
                             change = "▲ 9.1%",
                             modifier = Modifier.weight(1f)
                         )
@@ -321,7 +339,7 @@ fun MombasaDepotScreen(
                             LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                items(EnergyRepository.mombasaTanks) { tank ->
+                                items(mombasaTanks) { tank ->
                                     DepotTankGauge(tank = tank)
                                 }
                             }

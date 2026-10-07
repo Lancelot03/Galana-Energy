@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.EnergyRepository
+import com.example.data.SapSalesRepository
+import com.example.model.ActiveDataSource
 import com.example.model.ScreenRoute
 import com.example.model.Timeframe
 import com.example.ui.theme.*
@@ -40,8 +42,11 @@ fun HomeScreen(
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val billingItems by SapSalesRepository.billingItems.collectAsState()
+    val activeDataSource by SapSalesRepository.activeDataSource.collectAsState()
     var selectedTimeframe by remember { mutableStateOf(Timeframe.TODAY) }
-    val kpi = remember(selectedTimeframe) { EnergyRepository.getKpis(selectedTimeframe) }
+    val kpi = remember(selectedTimeframe, billingItems) { EnergyRepository.computeKpis(selectedTimeframe, billingItems) }
+    val regionalSales = remember(billingItems) { EnergyRepository.computeRegionalSales(billingItems) }
     var showNotificationDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -143,6 +148,110 @@ fun HomeScreen(
             }
         }
 
+        // Active Data Source & SAP Integration Banner
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clickable { onNavigate(ScreenRoute.DATA_UPLOAD) }
+                    .testTag("sap_live_banner"),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = when (activeDataSource) {
+                        is ActiveDataSource.FileUploaded -> Color(0xFF0F2E1E)
+                        is ActiveDataSource.LiveSapApi -> Color(0xFF0D253F)
+                        is ActiveDataSource.StaticDefault -> Color(0xFF0F1E36)
+                    }
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = when (activeDataSource) {
+                                    is ActiveDataSource.FileUploaded -> Icons.Default.Description
+                                    is ActiveDataSource.LiveSapApi -> Icons.Default.CloudSync
+                                    is ActiveDataSource.StaticDefault -> Icons.Default.Storage
+                                },
+                                contentDescription = null,
+                                tint = when (activeDataSource) {
+                                    is ActiveDataSource.FileUploaded -> Color(0xFF86EFAC)
+                                    is ActiveDataSource.LiveSapApi -> Color(0xFF38BDF8)
+                                    is ActiveDataSource.StaticDefault -> FuelPetrolGreen
+                                },
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = when (val src = activeDataSource) {
+                                        is ActiveDataSource.FileUploaded -> "CUSTOM FILE: ${src.fileName.take(18)}"
+                                        is ActiveDataSource.LiveSapApi -> "LIVE SAP S/4HANA ODATA"
+                                        is ActiveDataSource.StaticDefault -> "SAP S/4HANA BASELINE"
+                                    },
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = when (activeDataSource) {
+                                        is ActiveDataSource.FileUploaded -> Color(0xFF86EFAC)
+                                        is ActiveDataSource.LiveSapApi -> Color(0xFFBAE6FD)
+                                        is ActiveDataSource.StaticDefault -> GalanaAmberLight
+                                    },
+                                    letterSpacing = 0.5.sp
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(FuelPetrolGreen)
+                                )
+                            }
+                            Text(
+                                text = when (val src = activeDataSource) {
+                                    is ActiveDataSource.FileUploaded -> "${src.recordCount} records loaded • Real-time Active"
+                                    is ActiveDataSource.LiveSapApi -> "Client 080 • ZANI_UI_GAL_SALES • ${billingItems.size} items"
+                                    is ActiveDataSource.StaticDefault -> "Client 080 • ${billingItems.size} baseline records (KES 11.64M)"
+                                },
+                                fontSize = 11.sp,
+                                color = Color(0xFFCBD5E1)
+                            )
+                        }
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (activeDataSource is ActiveDataSource.FileUploaded) "Manage" else "Upload/Sync",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+
         // Timeframe Selector Tabs
         item {
             Row(
@@ -157,9 +266,9 @@ fun HomeScreen(
                 Timeframe.values().forEach { tf ->
                     val isSelected = selectedTimeframe == tf
                     val label = when (tf) {
-                        Timeframe.TODAY -> "Today (12.4M)"
-                        Timeframe.WEEK -> "Week (78.2M)"
-                        Timeframe.MONTH -> "Month (312.5M)"
+                        Timeframe.TODAY -> "Today (${EnergyRepository.computeKpis(Timeframe.TODAY, billingItems).total})"
+                        Timeframe.WEEK -> "Week (${EnergyRepository.computeKpis(Timeframe.WEEK, billingItems).total})"
+                        Timeframe.MONTH -> "Month (${EnergyRepository.computeKpis(Timeframe.MONTH, billingItems).total})"
                     }
                     Box(
                         modifier = Modifier
@@ -461,6 +570,58 @@ fun HomeScreen(
                             .clickable { onNavigate(ScreenRoute.ASK_AI) }
                     )
                 }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    ModuleShortcutCard(
+                        title = "SAP Live Sync",
+                        subtitle = "OData Billing Items",
+                        icon = Icons.Default.CloudSync,
+                        color = Color(0xFF0369A1),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onNavigate(ScreenRoute.SAP_LIVE_SYNC) }
+                    )
+                    ModuleShortcutCard(
+                        title = "Mombasa 360",
+                        subtitle = "Tank Farm & Gantries",
+                        icon = Icons.Default.Visibility,
+                        color = GalanaAmberDark,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onNavigate(ScreenRoute.MOMBASA_DEPOT) }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    ModuleShortcutCard(
+                        title = "Upload Data",
+                        subtitle = "Excel & JSON Ingestion",
+                        icon = Icons.Default.CloudUpload,
+                        color = GalanaAmber,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onNavigate(ScreenRoute.DATA_UPLOAD) }
+                    )
+                    ModuleShortcutCard(
+                        title = "All Locations",
+                        subtitle = "28 Station Directory",
+                        icon = Icons.Default.FormatListBulleted,
+                        color = Color(0xFF475569),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onNavigate(ScreenRoute.ALL_LOCATIONS) }
+                    )
+                }
             }
         }
 
@@ -501,7 +662,7 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    EnergyRepository.regionalSales.forEach { reg ->
+                    regionalSales.forEach { reg ->
                         Column(modifier = Modifier.padding(vertical = 6.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),

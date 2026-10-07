@@ -1,6 +1,7 @@
 package com.example.data
 
 import com.example.model.*
+import java.util.Locale
 
 object EnergyRepository {
 
@@ -412,4 +413,272 @@ object EnergyRepository {
             chips = listOf("Show detailed data", "Top products", "View customers", "View by day")
         )
     )
+
+    fun computeKpis(timeframe: Timeframe, items: List<SapBillingItem>): KpiMetrics {
+        if (items.isEmpty()) return getKpis(timeframe)
+
+        val totalNetRaw = items.sumOf { it.netAmount }
+        val fuelNetRaw = items.filter { it.productCategory.equals("Fuel", ignoreCase = true) }.sumOf { it.netAmount }
+        val lubeNetRaw = items.filter { it.productCategory.equals("Lubricants", ignoreCase = true) }.sumOf { it.netAmount }
+        val totalVolumeRaw = items.sumOf { it.quantity }
+
+        val factor = when (timeframe) {
+            Timeframe.TODAY -> 1.0
+            Timeframe.WEEK -> 5.5
+            Timeframe.MONTH -> 22.0
+        }
+
+        val totalNetM = (totalNetRaw * factor) / 1_000_000.0
+        val fuelNetM = (fuelNetRaw * factor) / 1_000_000.0
+        val lubeNetM = (lubeNetRaw * factor) / 1_000_000.0
+        val volKl = totalVolumeRaw * factor
+
+        val totalFormatted = String.format(Locale.US, "%.1fM", totalNetM)
+        val fuelFormatted = String.format(Locale.US, "%.1fM", fuelNetM)
+        val lubeFormatted = String.format(Locale.US, "%.1fM", lubeNetM)
+        val volFormatted = if (volKl >= 1000) String.format(Locale.US, "%,.0f", volKl) else String.format(Locale.US, "%.0f", volKl)
+
+        val totalChange = when (timeframe) {
+            Timeframe.TODAY -> "8.2%"
+            Timeframe.WEEK -> "11.4%"
+            Timeframe.MONTH -> "14.1%"
+        }
+        val fuelChange = when (timeframe) {
+            Timeframe.TODAY -> "9.1%"
+            Timeframe.WEEK -> "12.2%"
+            Timeframe.MONTH -> "15.3%"
+        }
+        val lubeChange = when (timeframe) {
+            Timeframe.TODAY -> "3.4%"
+            Timeframe.WEEK -> "5.8%"
+            Timeframe.MONTH -> "7.2%"
+        }
+        val volChange = when (timeframe) {
+            Timeframe.TODAY -> "6.7%"
+            Timeframe.WEEK -> "8.9%"
+            Timeframe.MONTH -> "11.5%"
+        }
+
+        return KpiMetrics(
+            total = totalFormatted,
+            fuel = fuelFormatted,
+            lube = lubeFormatted,
+            volume = volFormatted,
+            totalChange = totalChange,
+            fuelChange = fuelChange,
+            lubeChange = lubeChange,
+            volChange = volChange
+        )
+    }
+
+    fun computeLocations(items: List<SapBillingItem>): List<LocationItem> {
+        if (items.isEmpty()) return locations
+
+        val plantMap = items.groupBy { it.plantName.trim() }
+
+        val updatedList = locations.map { loc ->
+            val matchingItems = plantMap.entries.firstOrNull {
+                it.key.contains(loc.name, ignoreCase = true) || loc.name.contains(it.key, ignoreCase = true)
+            }?.value
+
+            if (matchingItems != null && matchingItems.isNotEmpty()) {
+                val netM = matchingItems.sumOf { it.netAmount } / 1_000_000.0
+                val vol = matchingItems.sumOf { it.quantity }.toInt()
+                loc.copy(
+                    salesKES = String.format(Locale.US, "%.2f", netM).toDoubleOrNull() ?: loc.salesKES,
+                    volumeKL = vol,
+                    status = if (loc.type == "Depot") "Operational • Real-time Active" else "Operational"
+                )
+            } else {
+                loc
+            }
+        }.toMutableList()
+
+        plantMap.forEach { (plantName, plantItems) ->
+            val exists = updatedList.any { it.name.contains(plantName, ignoreCase = true) || plantName.contains(it.name, ignoreCase = true) }
+            if (!exists) {
+                val netM = plantItems.sumOf { it.netAmount } / 1_000_000.0
+                val vol = plantItems.sumOf { it.quantity }.toInt()
+                val isDepot = plantName.contains("depot", ignoreCase = true) || plantName.contains("terminal", ignoreCase = true)
+                updatedList.add(
+                    LocationItem(
+                        id = "custom-${plantName.lowercase(Locale.ROOT).replace(" ", "-")}",
+                        name = plantName,
+                        type = if (isDepot) "Depot" else "Station",
+                        region = "Inland",
+                        salesKES = String.format(Locale.US, "%.2f", netM).toDoubleOrNull() ?: 1.0,
+                        change = 5.0,
+                        isPositive = true,
+                        coordsX = 45f,
+                        coordsY = 50f,
+                        volumeKL = vol,
+                        status = "Active Ingested Plant"
+                    )
+                )
+            }
+        }
+
+        return updatedList
+    }
+
+    fun computeProducts(items: List<SapBillingItem>): List<ProductItem> {
+        if (items.isEmpty()) return products
+
+        val productMap = items.groupBy { it.productName.trim() }
+
+        val updatedList = products.map { prod ->
+            val matchingItems = productMap.entries.firstOrNull {
+                it.key.contains(prod.name, ignoreCase = true) || prod.name.contains(it.key, ignoreCase = true) ||
+                        it.value.firstOrNull()?.productId.equals(prod.id, ignoreCase = true)
+            }?.value
+
+            if (matchingItems != null && matchingItems.isNotEmpty()) {
+                val netM = matchingItems.sumOf { it.netAmount } / 1_000_000.0
+                val vol = matchingItems.sumOf { it.quantity }.toInt()
+                prod.copy(
+                    salesKES = String.format(Locale.US, "%.2f", netM).toDoubleOrNull() ?: prod.salesKES,
+                    volumeKL = vol
+                )
+            } else {
+                prod
+            }
+        }.toMutableList()
+
+        productMap.forEach { (prodName, prodItems) ->
+            val exists = updatedList.any { it.name.contains(prodName, ignoreCase = true) || prodName.contains(it.name, ignoreCase = true) }
+            if (!exists) {
+                val first = prodItems.first()
+                val netM = prodItems.sumOf { it.netAmount } / 1_000_000.0
+                val vol = prodItems.sumOf { it.quantity }.toInt()
+                updatedList.add(
+                    ProductItem(
+                        id = first.productId.lowercase(Locale.ROOT),
+                        name = prodName,
+                        category = first.productCategory,
+                        volumeKL = vol,
+                        salesKES = String.format(Locale.US, "%.2f", netM).toDoubleOrNull() ?: 1.0,
+                        change = 8.0,
+                        isPositive = true,
+                        colorHex = if (first.productCategory.equals("Fuel", ignoreCase = true)) 0xFF0284C7 else 0xFF8B5CF6,
+                        iconType = if (first.productCategory.equals("Fuel", ignoreCase = true)) "fuel" else "oil",
+                        unitPriceKES = if (vol > 0) (prodItems.sumOf { it.netAmount } / vol) else 180.0,
+                        grossMarginPercent = 15.0,
+                        description = "Ingested product from SAP ledger / uploaded file."
+                    )
+                )
+            }
+        }
+
+        return updatedList
+    }
+
+    fun computeCustomers(items: List<SapBillingItem>): List<CustomerItem> {
+        if (items.isEmpty()) return customers
+
+        val custMap = items.groupBy { it.customerName.trim() }
+
+        val updatedList = customers.map { cust ->
+            val matchingItems = custMap.entries.firstOrNull {
+                it.key.contains(cust.name, ignoreCase = true) || cust.name.contains(it.key, ignoreCase = true) ||
+                        it.value.firstOrNull()?.customerId.equals(cust.id, ignoreCase = true) ||
+                        it.value.firstOrNull()?.customerId.equals(cust.code, ignoreCase = true)
+            }?.value
+
+            if (matchingItems != null && matchingItems.isNotEmpty()) {
+                val netM = matchingItems.sumOf { it.netAmount } / 1_000_000.0
+                cust.copy(
+                    salesKES = String.format(Locale.US, "%.2f", netM).toDoubleOrNull() ?: cust.salesKES
+                )
+            } else {
+                cust
+            }
+        }.toMutableList()
+
+        custMap.forEach { (custName, custItems) ->
+            val exists = updatedList.any { it.name.contains(custName, ignoreCase = true) || custName.contains(it.name, ignoreCase = true) }
+            if (!exists) {
+                val first = custItems.first()
+                val netM = custItems.sumOf { it.netAmount } / 1_000_000.0
+                updatedList.add(
+                    CustomerItem(
+                        id = first.customerId.lowercase(Locale.ROOT),
+                        name = custName,
+                        category = first.customerType,
+                        salesKES = String.format(Locale.US, "%.2f", netM).toDoubleOrNull() ?: 0.5,
+                        change = 6.0,
+                        isPositive = true,
+                        code = first.customerId,
+                        colorHex = 0xFF0284C7,
+                        contractsActive = 1,
+                        creditLimitKES = "KES 20M",
+                        paymentPerformance = "100% On-Time"
+                    )
+                )
+            }
+        }
+
+        return updatedList.sortedByDescending { it.salesKES }
+    }
+
+    fun computeDailyTrends(items: List<SapBillingItem>): List<DailyTrend> {
+        if (items.isEmpty()) return dailyTrends
+
+        val byDate = items.groupBy { it.billingDocumentDate }.toSortedMap()
+        if (byDate.size < 2) {
+            val totalM = items.sumOf { it.netAmount } / 1_000_000.0
+            val totalVol = items.sumOf { it.quantity }.toInt()
+            val lastDay = byDate.keys.firstOrNull() ?: "Today"
+            return dailyTrends.dropLast(1) + DailyTrend(
+                day = lastDay.takeLast(5),
+                value = String.format(Locale.US, "%.2f", totalM).toDoubleOrNull() ?: 2.4,
+                volumeKL = totalVol,
+                marginPercent = 15.5,
+                fullLabel = "KES ${String.format(Locale.US, "%.2f", totalM)}M • $totalVol KL"
+            )
+        }
+
+        return byDate.map { (date, docItems) ->
+            val netM = docItems.sumOf { it.netAmount } / 1_000_000.0
+            val vol = docItems.sumOf { it.quantity }.toInt()
+            val dayLabel = date.takeLast(5)
+            DailyTrend(
+                day = dayLabel,
+                value = String.format(Locale.US, "%.2f", netM).toDoubleOrNull() ?: 1.0,
+                volumeKL = vol,
+                marginPercent = 15.0,
+                fullLabel = "KES ${String.format(Locale.US, "%.2f", netM)}M • $vol KL"
+            )
+        }
+    }
+
+    fun computeRegionalSales(items: List<SapBillingItem>): List<RegionalSales> {
+        if (items.isEmpty()) return regionalSales
+
+        val coastNet = items.filter { it.plantName.contains("Mombasa", ignoreCase = true) || it.plantName.contains("Malindi", ignoreCase = true) }.sumOf { it.netAmount } / 1_000_000.0
+        val nairobiNet = items.filter { it.plantName.contains("Nairobi", ignoreCase = true) }.sumOf { it.netAmount } / 1_000_000.0
+        val westernNet = items.filter { it.plantName.contains("Kisumu", ignoreCase = true) }.sumOf { it.netAmount } / 1_000_000.0
+        val riftNet = items.filter { it.plantName.contains("Eldoret", ignoreCase = true) || it.plantName.contains("Nakuru", ignoreCase = true) }.sumOf { it.netAmount } / 1_000_000.0
+
+        return listOf(
+            RegionalSales("Coast", String.format(Locale.US, "%.1f", if (coastNet > 0) coastNet else 5.8).toDoubleOrNull() ?: 5.8, 11.2, true, 6),
+            RegionalSales("Nairobi", String.format(Locale.US, "%.1f", if (nairobiNet > 0) nairobiNet else 4.6).toDoubleOrNull() ?: 4.6, 7.5, true, 8),
+            RegionalSales("Western", String.format(Locale.US, "%.1f", if (westernNet > 0) westernNet else 1.8).toDoubleOrNull() ?: 1.8, 6.3, true, 5),
+            RegionalSales("Rift Valley", String.format(Locale.US, "%.1f", if (riftNet > 0) riftNet else 1.6).toDoubleOrNull() ?: 1.6, 3.9, true, 5),
+            RegionalSales("Eastern", 1.1, 2.4, false, 4)
+        )
+    }
+
+    fun computeMombasaTanks(items: List<SapBillingItem>): List<DepotTank> {
+        val mombasaItems = items.filter { it.plantName.contains("Mombasa", ignoreCase = true) }
+        val dieselVol = mombasaItems.filter { it.productCategory.equals("Fuel", ignoreCase = true) && it.productId.contains("DIESEL", ignoreCase = true) }.sumOf { it.quantity }.toInt()
+        val pmsVol = mombasaItems.filter { it.productId.contains("PMS", ignoreCase = true) || it.productId.contains("SUPER", ignoreCase = true) }.sumOf { it.quantity }.toInt()
+        val jetVol = mombasaItems.filter { it.productId.contains("JET", ignoreCase = true) || it.productId.contains("ATF", ignoreCase = true) }.sumOf { it.quantity }.toInt()
+
+        return listOf(
+            DepotTank("T-01", "Tank 1", "Diesel (AGO)", if (dieselVol > 0) 95 else 90, 15000, if (dieselVol > 0) "Active Dispatches (${dieselVol} KL)" else "Operational", 0xFF0284C7),
+            DepotTank("T-02", "Tank 2", "Super Petrol (PMS)", if (pmsVol > 0) 88 else 85, 12000, if (pmsVol > 0) "Active Dispatches (${pmsVol} KL)" else "Operational", 0xFF10B981),
+            DepotTank("T-03", "Tank 3", "Jet A-1 (ATF)", if (jetVol > 0) 75 else 65, 8000, "Receiving Berth 1", 0xFFEF4444),
+            DepotTank("T-04", "Tank 4", "Kerosene (IK)", 78, 6000, "Operational", 0xFFF59E0B)
+        )
+    }
 }
